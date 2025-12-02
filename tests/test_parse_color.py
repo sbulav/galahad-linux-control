@@ -6,7 +6,7 @@ import os
 import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from gaii_control import parse_color
+from glc_control import parse_color
 
 
 class TestParseColor:

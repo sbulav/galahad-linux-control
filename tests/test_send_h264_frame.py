@@ -6,7 +6,7 @@ import os
 from unittest.mock import Mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from gaii_control import send_h264_frame
+from glc_control import send_h264_frame
 
 
 class TestSendH264Frame:

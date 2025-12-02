@@ -2,7 +2,7 @@
 
 import pytest
 from PIL import Image
-from gaii_control.presets import MatrixPreset, Preset
+from glc_control.presets import MatrixPreset, Preset
 
 
 class TestPresetBase:

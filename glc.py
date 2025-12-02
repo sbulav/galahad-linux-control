@@ -3,11 +3,11 @@
 Lian Li Galahad II LCD Control for Linux
 
 This is the main entry point. The core functionality has been modularized
-into the gaii_control package for better maintainability and testability.
+into the glc_control package for better maintainability and testability.
 """
 
 import time
-from gaii_control import (
+from glc_control import (
     parse_args,
     find_device,
     setup_device,

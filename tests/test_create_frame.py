@@ -6,7 +6,7 @@ import os
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from gaii_control import create_frame, load_background
+from glc_control import create_frame, load_background
 
 
 class TestCreateFrame:
