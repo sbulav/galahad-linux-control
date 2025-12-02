@@ -8,6 +8,8 @@ Based on the [gaii-control](https://github.com/bn45hkurr0y4/gaii-control)
 
 **Device:** `0416:7395` Winbond Electronics Corp. LianLi-GA_II-LCD_v1.4
 
+![matrix-preset](./assets/matrix-preset.jpg)
+
 ## Features
 
 - Display time, date, CPU temperature, and CPU usage on the pump LCD
