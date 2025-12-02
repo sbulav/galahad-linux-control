@@ -27,6 +27,15 @@ nix develop
 python glc.py
 ```
 
+
+
+## Installation (Other Linux Distros)
+
+1. Install Python 3 and pip (e.g., `sudo apt install python3 python3-pip` on Debian/Ubuntu).
+2. Install system deps: `sudo apt install libusb-1.0-0-dev ffmpeg fonts-noto-core`.
+3. `pip install pyusb pillow psutil`.
+4. Clone repo, install udev rules (see USB Permissions), then run `python glc.py [OPTIONS]`.
+
 ### USB Permissions
 
 For non-root access, install udev rules:
