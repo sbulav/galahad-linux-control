@@ -19,6 +19,7 @@ from glc_control import (
     encode_h264,
     cleanup_device,
     MatrixPreset,
+    HeartbeatPreset,
 )
 
 
@@ -36,6 +37,9 @@ def main() -> None:
     if preset_mode:
         if preset_mode == "matrix":
             preset = MatrixPreset(fps=args.fps)
+            print(f"✅ Using preset mode: {preset_mode}")
+        elif preset_mode == "heartbeat":
+            preset = HeartbeatPreset(fps=args.fps)
             print(f"✅ Using preset mode: {preset_mode}")
         else:
             print(f"❌ Unknown preset mode: {preset_mode}")
@@ -67,10 +71,13 @@ def main() -> None:
             f"✅ device connected (RGB: {rgb_color}, FPS: {args.fps}, BG: {args.bg or 'solid'}, Overlay: {show_overlay})"
         )
 
-    # Set RGB color (green for matrix preset)
+    # Set RGB color (green for matrix preset, red for heartbeat)
     if preset_mode == "matrix":
         # Force green theme for matrix
         set_rgb_color(endpoint, (0, 255, 0))
+    elif preset_mode == "heartbeat":
+        # Force red theme for heartbeat
+        set_rgb_color(endpoint, (255, 0, 0))
     else:
         set_rgb_color(endpoint, rgb_color)
 

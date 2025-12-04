@@ -83,6 +83,8 @@ Background image examples:
 Preset mode examples:
   %(prog)s --preset matrix                    # Matrix falling characters
   %(prog)s --preset matrix --fps 15           # Matrix mode with faster animation
+  %(prog)s --preset heartbeat                 # Pulsing heartbeat CPU load bars
+  %(prog)s --preset heartbeat --fps 20        # Heartbeat mode with faster pulse
         """,
     )
     parser.add_argument(
@@ -131,8 +133,8 @@ Preset mode examples:
         type=str,
         default=None,
         metavar="PRESET",
-        choices=["matrix"],
-        help="Display preset mode: matrix (falling characters with CPU temp)",
+        choices=["matrix", "heartbeat"],
+        help="Display preset mode: matrix (falling characters with CPU temp), heartbeat (pulsing CPU load bars)",
     )
     return parser
 

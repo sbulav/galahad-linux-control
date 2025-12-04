@@ -16,7 +16,7 @@ from .config import (
 from .cli import parse_color, parse_args, create_parser
 from .config_loader import load_config, find_config_file, create_config_example
 from .image_processor import encode_h264, load_background, create_frame
-from .presets import Preset, MatrixPreset
+from .presets import Preset, MatrixPreset, HeartbeatPreset
 from .usb_device import (
     find_device,
     setup_device,
@@ -55,6 +55,7 @@ __all__ = [
     # Presets
     "Preset",
     "MatrixPreset",
+    "HeartbeatPreset",
     # USB Device
     "find_device",
     "setup_device",
