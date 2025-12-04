@@ -13,6 +13,8 @@ Based on the [gaii-control](https://github.com/bn45hkurr0y4/gaii-control)
 ## Features
 
 - Display time, date, CPU temperature, and CPU usage on the pump LCD
+- Animated "matrix" preset with nice falling symbols
+- Animated "heartbeat" preset for real-time CPU load visualization
 - Control RGB light color
 - Custom background images (PNG, JPG, etc.) with scaling modes
 - Configurable refresh rate
@@ -35,7 +37,7 @@ python glc.py
 
 1. Install Python 3 and pip (e.g., `sudo apt install python3 python3-pip` on Debian/Ubuntu).
 2. Install system deps: `sudo apt install libusb-1.0-0-dev ffmpeg fonts-noto-core`.
-3. `pip install pyusb pillow psutil`.
+3. `pip install pyusb pillow psutil av`  # av is required for fast in-memory encoding.
 4. Clone repo, install udev rules (see USB Permissions), then run `python glc.py [OPTIONS]`.
 
 ### USB Permissions
@@ -63,6 +65,10 @@ services.udev.extraRules = ''
 python glc.py [OPTIONS]
 
 Options:
+  --preset, -p {matrix,heartbeat}  Display preset mode: matrix (falling characters),
+                                   heartbeat (animated CPU pulse bar)
+
+Options:
   --rgb, -c COLOR        RGB light color: name, hex (#RRGGBB), or r,g,b
                          Default: #00FFC8 (cyan)
   --fps, -f FPS          Display refresh rate (default: 5)
@@ -81,8 +87,11 @@ Examples:
   python glc.py --bg wallpaper.png   # Background with overlay
   python glc.py --bg photo.jpg --no-overlay  # Image only
   python glc.py --bg logo.png --bg-mode fit  # Fit with black bars
-  python glc.py --bg art.png --overlay-opacity 200  # Opaque overlay
+   python glc.py --bg art.png --overlay-opacity 200  # Opaque overlay
+   python glc.py --preset heartbeat                 # New: Animated heartbeat CPU bar
+   python glc.py --preset heartbeat --fps 20        # Heartbeat mode with faster animation
 ```
+
 
 ## Color Names
 
@@ -106,10 +115,15 @@ Color names are case-insensitive, so `blue`, `BLUE`, and `BrIgHt_YeLLoW` all wor
 
 ## Requirements
 
-- Python 3 with pyusb, pillow, psutil
-- ffmpeg (for H.264 encoding)
+- Python 3 with pyusb, pillow, psutil, av (PyAV, new: fast in-memory H.264 encoding)
+- ffmpeg (legacy, most encoding now uses PyAV)
 - Fonts (noto-fonts recommended)
 - fc-match (fontconfig) for font detection
+
+## Performance Notes
+
+- Encoding is now performed in-memory using PyAV (Python module av), which yields much faster frame rendering compared to spawning ffmpeg for each frame. This enables higher FPS and smoother visualizations, especially for animated presets.
+- Additional caching for images, font lookups, and CPU stats further improves efficiency and animation smoothness.
 
 ## Troubleshooting
 
