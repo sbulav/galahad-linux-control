@@ -72,8 +72,9 @@ class MatrixPreset(Preset):
                 'trail_length': random.randint(5, 15),  # Length of fade trail
             }
         
-        # Font setup
+        # Font setup - load once and cache
         self.font = self._load_font()
+        self.temp_font = self._load_temp_font()  # Cache temperature font
         
         # Color palette - shades of green
         self.colors = {
@@ -106,6 +107,27 @@ class MatrixPreset(Preset):
         
         # Fall back to default font
         return ImageFont.load_default()
+    
+    def _load_temp_font(self) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
+        """Load large font for temperature display (cached at init).
+        
+        Returns:
+            ImageFont: Loaded font or default font
+        """
+        try:
+            result = subprocess.run(
+                ["fc-match", "-f", "%{file}", "NotoSansMono:weight=bold"],
+                capture_output=True,
+                text=True,
+            )
+            font_path = result.stdout.strip() if result.returncode == 0 else None
+            if font_path and os.path.exists(font_path):
+                return ImageFont.truetype(font_path, 60)
+        except Exception:
+            pass
+        
+        # Fall back to small font
+        return self.font
     
     def _get_cpu_temp(self) -> str:
         """Get current CPU temperature.
@@ -186,25 +208,11 @@ class MatrixPreset(Preset):
                     except Exception:
                         pass
         
-        # Draw CPU temperature in center
+        # Draw CPU temperature in center (using cached font)
         cpu_temp = self._get_cpu_temp()
-        try:
-            # Load larger font for temperature display
-            result = subprocess.run(
-                ["fc-match", "-f", "%{file}", "NotoSansMono:weight=bold"],
-                capture_output=True,
-                text=True,
-            )
-            font_path = result.stdout.strip() if result.returncode == 0 else None
-            if font_path and os.path.exists(font_path):
-                temp_font = ImageFont.truetype(font_path, 60)
-            else:
-                temp_font = self.font
-        except Exception:
-            temp_font = self.font
         
         # Get text bounding box for centering
-        bbox = draw.textbbox((0, 0), cpu_temp, font=temp_font)
+        bbox = draw.textbbox((0, 0), cpu_temp, font=self.temp_font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
         
@@ -231,7 +239,7 @@ class MatrixPreset(Preset):
             (self.width // 2 - text_width // 2, self.height // 2 - text_height // 2),
             cpu_temp,
             fill=self.colors['bright'],
-            font=temp_font,
+            font=self.temp_font,
         )
         
         self.frame_count += 1

@@ -21,6 +21,7 @@
            pillow
            psutil
            pytest
+           av
          ]);
       in
       {
