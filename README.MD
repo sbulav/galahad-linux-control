@@ -28,24 +28,24 @@ nix run .
 
 # Or enter dev shell
 nix develop
-python glc.py
+cargo run -- [OPTIONS]
 ```
 
 
 
 ## Installation (Other Linux Distros)
 
-1. Install Python 3 and pip (e.g., `sudo apt install python3 python3-pip` on Debian/Ubuntu).
-2. Install system deps: `sudo apt install libusb-1.0-0-dev ffmpeg fonts-noto-core`.
-3. `pip install pyusb pillow psutil av`  # av is required for fast in-memory encoding.
-4. Clone repo, install udev rules (see USB Permissions), then run `python glc.py [OPTIONS]`.
+1. Install Rust and Cargo.
+2. Install system deps: `sudo apt install libusb-1.0-0-dev pkg-config ffmpeg fonts-noto-core`.
+3. Clone repo and build: `cargo build --release`.
+4. Install udev rules (see USB Permissions), then run `./target/release/glc [OPTIONS]`.
 
 ### USB Permissions
 
 For non-root access, install udev rules:
 
 ```bash
-sudo cp 99-lian-li-galahad.rules /etc/udev/rules.d/
+sudo cp utils/99-lian-li-galahad.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 # Replug USB device
@@ -62,7 +62,7 @@ services.udev.extraRules = ''
 ## Usage
 
 ```
-python glc.py [OPTIONS]
+glc [OPTIONS]
 
 Options:
   --preset, -p {matrix,heartbeat}  Display preset mode: matrix (falling characters),
@@ -79,17 +79,17 @@ Options:
   --overlay-opacity N    Overlay background opacity 0-255 (default: 180)
 
 Examples:
-  python glc.py                      # Default cyan
-  python glc.py --rgb blue           # Blue RGB light
-  python glc.py --rgb "#00FF00"      # Green RGB (hex format)
-  python glc.py --rgb "255,0,0"      # Red RGB (r,g,b format)
-  python glc.py --rgb bright_yellow  # Bright yellow RGB light
-  python glc.py --bg wallpaper.png   # Background with overlay
-  python glc.py --bg photo.jpg --no-overlay  # Image only
-  python glc.py --bg logo.png --bg-mode fit  # Fit with black bars
-   python glc.py --bg art.png --overlay-opacity 200  # Opaque overlay
-   python glc.py --preset heartbeat                 # New: Animated heartbeat CPU bar
-   python glc.py --preset heartbeat --fps 20        # Heartbeat mode with faster animation
+  glc                      # Default cyan
+  glc --rgb blue           # Blue RGB light
+  glc --rgb "#00FF00"      # Green RGB (hex format)
+  glc --rgb "255,0,0"      # Red RGB (r,g,b format)
+  glc --rgb bright_yellow  # Bright yellow RGB light
+  glc --bg wallpaper.png   # Background with overlay
+  glc --bg photo.jpg --no-overlay  # Image only
+  glc --bg logo.png --bg-mode fit  # Fit with black bars
+  glc --bg art.png --overlay-opacity 200  # Opaque overlay
+  glc --preset heartbeat                 # Animated heartbeat CPU bar
+  glc --preset heartbeat --fps 20        # Heartbeat mode with faster animation
 ```
 
 
@@ -115,15 +115,17 @@ Color names are case-insensitive, so `blue`, `BLUE`, and `BrIgHt_YeLLoW` all wor
 
 ## Requirements
 
-- Python 3 with pyusb, pillow, psutil, av (PyAV, new: fast in-memory H.264 encoding)
-- ffmpeg (legacy, most encoding now uses PyAV)
+- Rust-built `glc` binary
+- libusb
+- ffmpeg for H.264 encoding
 - Fonts (noto-fonts recommended)
-- fc-match (fontconfig) for font detection
+- fontconfig-compatible system fonts
 
 ## Performance Notes
 
-- Encoding is now performed in-memory using PyAV (Python module av), which yields much faster frame rendering compared to spawning ffmpeg for each frame. This enables higher FPS and smoother visualizations, especially for animated presets.
-- Additional caching for images, font lookups, and CPU stats further improves efficiency and animation smoothness.
+- Rendering and USB packet construction are implemented in Rust.
+- H.264 encoding is performed by an external `ffmpeg` process in v1 for packaging reliability.
+- CPU stats and image/font resources are cached where practical for smoother animation.
 
 ## Troubleshooting
 
@@ -131,4 +133,3 @@ Color names are case-insensitive, so `blue`, `BLUE`, and `BrIgHt_YeLLoW` all wor
 - **Font not found**: Ensure noto-fonts is installed
 - **Background fails**: Check image path and format (PNG/JPG supported)
 - **Type errors in diagnostics**: Ignore pyusb warnings (runtime works fine)
-

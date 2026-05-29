@@ -1,0 +1,29 @@
+[package]
+name = "galahad-linux-control"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Lian Li Galahad II LCD control for Linux"
+
+[[bin]]
+name = "glc"
+path = "src/main.rs"
+
+[dependencies]
+ab_glyph = "0.2"
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+fontdb = "0.23"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+imageproc = "0.25"
+rand = "0.8"
+rusb = "0.9"
+serde = { version = "1", features = ["derive"] }
+tempfile = "3"
+toml = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
