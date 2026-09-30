@@ -20,7 +20,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "galahad-linux-control";
-          version = "0.1.0";
+          version = "0.2.0";
           src = ./.;
 
           cargoLock.lockFile = ./Cargo.lock;
@@ -41,6 +41,13 @@
               --set FONTCONFIG_PATH ${pkgs.fontconfig.out}/etc/fonts \
               --prefix XDG_DATA_DIRS : ${pkgs.noto-fonts}/share
           '';
+
+          meta = {
+            mainProgram = "glc";
+            description = "Lian Li Galahad II LCD control for Linux";
+            license = pkgs.lib.licenses.mit;
+            platforms = pkgs.lib.platforms.linux;
+          };
         };
 
         apps.default = {
@@ -61,12 +68,12 @@
             pkgs.noto-fonts
           ];
 
-           shellHook = ''
-             export FONTCONFIG_FILE=${pkgs.fontconfig.out}/etc/fonts/fonts.conf
-             export FONTCONFIG_PATH=${pkgs.fontconfig.out}/etc/fonts
-             echo "Galahad II LCD dev environment ready!"
-             echo "Run: cargo run -- [OPTIONS]"
-           '';
+          shellHook = ''
+            export FONTCONFIG_FILE=${pkgs.fontconfig.out}/etc/fonts/fonts.conf
+            export FONTCONFIG_PATH=${pkgs.fontconfig.out}/etc/fonts
+            echo "Galahad II LCD dev environment ready!"
+            echo "Run: cargo run -- [OPTIONS]"
+          '';
         };
       }
     );

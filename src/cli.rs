@@ -46,6 +46,13 @@ pub struct Args {
         help = "Display preset mode: matrix or heartbeat"
     )]
     pub preset: Option<PresetMode>,
+
+    #[arg(
+        long = "config",
+        value_name = "PATH",
+        help = "Config file path (skips the default search)"
+    )]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -59,6 +66,18 @@ impl std::fmt::Display for PresetMode {
         match self {
             PresetMode::Matrix => write!(f, "matrix"),
             PresetMode::Heartbeat => write!(f, "heartbeat"),
+        }
+    }
+}
+
+impl FromStr for PresetMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "matrix" => Ok(Self::Matrix),
+            "heartbeat" => Ok(Self::Heartbeat),
+            _ => Err(format!("invalid preset '{s}'")),
         }
     }
 }
@@ -150,6 +169,16 @@ mod tests {
         assert_eq!(parse_color("BLUE").unwrap(), Rgb(0, 0, 255));
         assert_eq!(parse_color("#00ffcc").unwrap(), Rgb(0, 255, 204));
         assert_eq!(parse_color("128, 64, 192").unwrap(), Rgb(128, 64, 192));
+    }
+
+    #[test]
+    fn parses_preset_case_insensitively() {
+        assert_eq!("Matrix".parse::<PresetMode>().unwrap(), PresetMode::Matrix);
+        assert_eq!(
+            "HEARTBEAT".parse::<PresetMode>().unwrap(),
+            PresetMode::Heartbeat
+        );
+        assert!("disco".parse::<PresetMode>().is_err());
     }
 
     #[test]

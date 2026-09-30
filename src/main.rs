@@ -1,20 +1,24 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
-use galahad_linux_control::cli::{Args, PresetMode};
-use galahad_linux_control::config::{load_settings, Rgb};
+use galahad_linux_control::app::{describe_bg, file_mtime, Display, RELOAD_INTERVAL};
+use galahad_linux_control::cli::Args;
+use galahad_linux_control::config::{effective_rgb, load_settings_from, resolve_config_path};
 use galahad_linux_control::encode::encode_h264;
 use galahad_linux_control::metrics::CpuMeter;
-use galahad_linux_control::presets::{HeartbeatPreset, MatrixPreset, Preset};
-use galahad_linux_control::render::{create_frame, load_background, Fonts};
+use galahad_linux_control::render::Fonts;
 use galahad_linux_control::usb::GalahadDevice;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+
+/// Exit (non-zero) after this many frames in a row fail to encode or send.
+const MAX_CONSECUTIVE_FRAME_ERRORS: u32 = 10;
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let settings = load_settings(args)?;
-    let frame_delay = Duration::from_secs_f32(1.0 / settings.fps.max(0.1));
+    let config_path = resolve_config_path(&args);
+    let mut config_stamp = config_path.as_deref().and_then(file_mtime);
+    let mut display = Display::new(load_settings_from(&args, config_path.as_deref()));
 
     let running = Arc::new(AtomicBool::new(true));
     let signal_running = Arc::clone(&running);
@@ -24,38 +28,20 @@ fn main() -> Result<()> {
 
     let fonts = Fonts::load();
     let mut cpu = CpuMeter::default();
-    let bg = if let (Some(path), None) = (&settings.bg, settings.preset) {
-        match load_background(path, settings.bg_mode) {
-            Ok(image) => Some(image),
-            Err(err) => {
-                eprintln!("❌ {err}; falling back to solid colors");
-                None
-            }
-        }
-    } else {
-        None
-    };
 
-    let mut preset: Option<Box<dyn Preset>> = match settings.preset {
-        Some(PresetMode::Matrix) => {
-            println!("✅ Using preset mode: matrix");
-            Some(Box::new(MatrixPreset::new()))
-        }
-        Some(PresetMode::Heartbeat) => {
-            println!("✅ Using preset mode: heartbeat");
-            Some(Box::new(HeartbeatPreset::new(settings.fps)))
-        }
-        None => None,
-    };
+    if let Some(mode) = display.settings().preset {
+        println!("✅ Using preset mode: {mode}");
+    }
 
     let mut device = match GalahadDevice::open() {
         Ok(device) => device,
         Err(err) => {
             eprintln!("❌ {err}");
-            return Ok(());
+            return Err(err);
         }
     };
 
+    let settings = display.settings();
     if let Some(mode) = settings.preset {
         println!(
             "✅ device connected (Preset: {mode}, FPS: {})",
@@ -66,41 +52,53 @@ fn main() -> Result<()> {
             "✅ device connected (RGB: {}, FPS: {}, BG: {}, Overlay: {})",
             settings.rgb,
             settings.fps,
-            settings
-                .bg
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "solid".into()),
+            describe_bg(settings),
             settings.show_overlay
         );
     }
+    if let Some(path) = &config_path {
+        println!("👀 watching config {}", path.display());
+    }
 
-    let rgb = match settings.preset {
-        Some(PresetMode::Matrix) => Rgb(0, 255, 0),
-        Some(PresetMode::Heartbeat) => Rgb(255, 0, 0),
-        None => settings.rgb,
-    };
-    device.set_rgb_color(rgb)?;
+    device.set_rgb_color(effective_rgb(display.settings()))?;
 
+    let mut last_check = Instant::now();
+    let mut consecutive_errors = 0u32;
     while running.load(Ordering::SeqCst) {
         let started = Instant::now();
-        let frame = match preset.as_mut() {
-            Some(preset) => preset.render(&fonts, &mut cpu),
-            None => create_frame(
-                bg.as_ref(),
-                settings.show_overlay,
-                settings.overlay_opacity,
-                &fonts,
-                &mut cpu,
-            ),
-        };
 
-        match encode_h264(&frame).and_then(|data| device.send_h264_frame(&data)) {
-            Ok(()) => {}
-            Err(err) => eprintln!("❌ Error: {err}"),
+        if last_check.elapsed() >= RELOAD_INTERVAL {
+            last_check = started;
+            let stamp = config_path.as_deref().and_then(file_mtime);
+            let bg_changed = display.current_bg_identity() != *display.loaded_bg_identity();
+            if stamp != config_stamp || bg_changed {
+                config_stamp = stamp;
+                let reload = display.apply(load_settings_from(&args, config_path.as_deref()));
+                if let Some(rgb) = reload.rgb {
+                    if let Err(err) = device.set_rgb_color(rgb) {
+                        eprintln!("❌ Error: {err}");
+                    }
+                }
+                println!("🔄 config reloaded: {}", reload.summary());
+            }
         }
 
-        if let Some(remaining) = frame_delay.checked_sub(started.elapsed()) {
+        let frame = display.render(&fonts, &mut cpu);
+        match encode_h264(&frame).and_then(|data| device.send_h264_frame(&data)) {
+            Ok(()) => consecutive_errors = 0,
+            Err(err) => {
+                eprintln!("❌ Error: {err}");
+                consecutive_errors += 1;
+                if consecutive_errors >= MAX_CONSECUTIVE_FRAME_ERRORS {
+                    drop(device);
+                    return Err(anyhow!(
+                        "giving up after {consecutive_errors} consecutive frame errors"
+                    ));
+                }
+            }
+        }
+
+        if let Some(remaining) = display.frame_delay().checked_sub(started.elapsed()) {
             std::thread::sleep(remaining);
         }
     }

@@ -1,39 +1,53 @@
 # Agent Guidelines for galahad-linux-control
 
-## Build & Run
+Rust CLI (`glc`, crate `galahad_linux_control`) that drives the Lian Li Galahad II LCD pump:
+renders 480×480 frames, encodes them to H.264 with an external `ffmpeg`, writes them over libusb.
 
-- **Dev shell**: `nix develop` (provides Python 3.13, pyusb, pillow, psutil, libusb1, ffmpeg, noto-fonts)
-- **Run directly**: `nix run .`
-- **Run script**: `python glc.py [OPTIONS]`
-- **No tests exist** - this is a single-file Python CLI tool
+## Dev shell and checks
 
-## Code Style (Python)
+- `nix develop` — `cargo`, `rustc`, `clippy`, `rustfmt`, `ffmpeg`, libusb and Noto fonts are only
+  available inside it. If a host `LD_LIBRARY_PATH` breaks ffmpeg, use `env -u LD_LIBRARY_PATH nix develop`.
+- Run all of these before calling a change done:
+  - `cargo fmt -- --check`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo test`
+  - `nix build .` (also runs `cargo test`; new files must be `git add`ed or the flake cannot see them)
+- `nix run . -- [OPTIONS]` runs against the real pump.
 
-- **Formatting**: PEP 8 with 4-space indentation
-- **Imports**: Standard library first, then third-party (usb, PIL, psutil)
-- **Types**: No type hints currently used; add them when modifying functions
-- **Naming**: snake_case for functions/variables, UPPER_CASE for constants (VENDOR_ID, PRODUCT_ID)
-- **Error handling**: Broad `except:` clauses are acceptable for hardware/temporary failures; avoid in general code
-- **Documentation**: Docstrings for public functions (e.g., `load_background()`, `parse_color()`)
-- **Line length**: ~100 characters (no hard limit enforced)
+## Module map
 
-## Repository Structure
+- `src/main.rs` — entry point: open device, main render loop, hot-reload polling, error budget.
+- `src/app.rs` — `Display` state (settings, background, preset) and `apply` for reload diffs.
+- `src/cli.rs` — clap `Args`, `PresetMode`, `ScalingMode`, `parse_color`.
+- `src/config.rs` — constants, TOML config file loading, CLI/file merge, `Colors`, `effective_rgb`.
+- `src/render.rs` — fonts, background scaling, `create_frame` overlay drawing.
+- `src/presets.rs` — `matrix` and `heartbeat` animations (`Preset` trait).
+- `src/metrics.rs` — CPU usage (`/proc/stat`) and temperature (hwmon `coretemp`/`k10temp`).
+- `src/encode.rs` — `ffmpeg` subprocess wrapper producing baseline H.264.
+- `src/protocol.rs` — RGB and H.264 packet construction.
+- `src/usb.rs` — `GalahadDevice`: libusb open/claim, bulk writes, cleanup on drop.
+- `src/lib.rs` — module declarations and re-exports.
 
-- **glc.py**: Single 414-line script handling USB device control, frame rendering, H.264 encoding
-- **flake.nix**: NixOS development environment + package definition
-- **99-lian-li-galahad.rules**: udev rules for non-root USB access
-- **readme.md**: User documentation
+## USB protocol
 
-## Key Functions
+- Device `0416:7395` (Winbond, `LianLi-GA_II-LCD_v1.4`), control interface `1`, first OUT endpoint.
+- Display 480×480. H.264 frames are split into 1024-byte packets (11-byte header + up to
+  1013 bytes payload); RGB is a separate 64-byte packet. Both are built in `protocol.rs`.
 
-- `create_frame()`: Renders clock/CPU/date overlay on background image
-- `encode_h264()`: Wraps ffmpeg to convert PNG → H.264 for LCD display
-- `send_h264_frame()`: Chunks and sends H.264 data to USB device
-- `load_background()`: Handles image resizing with stretch/fit/fill modes
-- `parse_color()`: CLI color argument parser (#RRGGBB or r,g,b)
+## Conventions
 
-## Notes
+- rustfmt defaults; clippy clean with `-D warnings`.
+- Errors via `anyhow` (`Context` for messages); no new dependencies without a reason.
+- Unit tests are hardware-free: they must never open the USB device or require the pump.
+  The ffmpeg test skips itself when `ffmpeg` is not on `PATH`.
+- Keep USB access in `usb.rs` and out of logic you want to test (`app.rs` returns what to send).
 
-- Device: Lian Li Galahad II LCD (Winbond 0416:7395)
-- Display: 480×480 pixels
-- No automatic formatting tool configured; maintain consistency with existing code
+## Hot-reload contract
+
+- About once per second `main` re-stats the config file (mtime) and the background
+  (`canonicalize` target + that target's mtime), so re-pointing a `bg` symlink is detected.
+- On change, settings are reloaded and only the difference is applied: pump RGB re-sent,
+  background reloaded, preset rebuilt, frame delay recomputed; colours/overlay apply next frame.
+- A missing `--config` file or a bad value is non-fatal: one warning, then defaults.
+- Fatal (non-zero exit, for `Restart=on-failure`): device cannot be opened, or
+  10 consecutive frame encode/send failures.

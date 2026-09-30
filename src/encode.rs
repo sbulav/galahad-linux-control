@@ -14,6 +14,7 @@ pub fn encode_h264(image: &RgbImage) -> Result<Vec<u8>> {
             .to_rgb8()
     };
 
+    let size = format!("{LCD_WIDTH}x{LCD_HEIGHT}");
     let mut child = Command::new("ffmpeg")
         .args([
             "-hide_banner",
@@ -24,7 +25,7 @@ pub fn encode_h264(image: &RgbImage) -> Result<Vec<u8>> {
             "-pix_fmt",
             "rgb24",
             "-s",
-            "480x480",
+            size.as_str(),
             "-i",
             "pipe:0",
             "-frames:v",
@@ -55,16 +56,19 @@ pub fn encode_h264(image: &RgbImage) -> Result<Vec<u8>> {
         .spawn()
         .context("failed to start ffmpeg; ensure ffmpeg is installed")?;
 
-    child
-        .stdin
-        .as_mut()
-        .context("failed to open ffmpeg stdin")?
-        .write_all(frame.as_raw())
-        .context("failed to send frame to ffmpeg")?;
+    let mut stdin = child.stdin.take().context("failed to open ffmpeg stdin")?;
+    let write_result = stdin.write_all(frame.as_raw());
+    drop(stdin);
 
     let output = child
         .wait_with_output()
         .context("failed to wait for ffmpeg")?;
+    if let Err(err) = write_result {
+        return Err(anyhow!(
+            "failed to send frame to ffmpeg ({err}); ffmpeg said: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
     if !output.status.success() {
         return Err(anyhow!(
             "ffmpeg failed: {}",

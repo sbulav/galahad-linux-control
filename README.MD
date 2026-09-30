@@ -23,8 +23,9 @@ This project is based on the USB protocol work from [`gaii-control`](https://git
   - `matrix`: falling green characters with CPU temperature.
   - `heartbeat`: pulsing CPU load visualization.
 - Set pump RGB color by name, hex value, or `r,g,b` triplet.
-- Read defaults from a TOML config file.
-- Run as a foreground CLI process with clean Ctrl-C shutdown.
+- Read defaults from a TOML config file, including overlay text colors.
+- Hot-reload the config file and background image without restarting.
+- Run as a foreground CLI process with clean Ctrl-C shutdown, or as a `systemd --user` service.
 - Build and run with Nix or Cargo.
 
 ## Quick start
@@ -116,6 +117,7 @@ Options:
       --no-overlay               Disable time/date/CPU overlay
       --overlay-opacity <0-255>  Overlay background opacity (0=transparent, 255=solid)
   -p, --preset <PRESET>          Display preset mode: matrix or heartbeat [possible values: matrix, heartbeat]
+      --config <PATH>            Config file path (skips the default search)
   -h, --help                     Print help
 ```
 
@@ -174,7 +176,9 @@ glc --preset heartbeat --fps 20
 2. `~/gaii-control.toml`
 3. `./gaii-control.toml`
 
-CLI options override config file values.
+Pass `--config <PATH>` to use a specific file instead. The file does not have to exist yet: `glc` warns, starts with defaults, and picks the file up as soon as it appears.
+
+CLI options override config file values. Keys can live at the top level or under a `[gaii-control]` section.
 
 Example:
 
@@ -186,6 +190,11 @@ bg = "~/Pictures/wallpaper.png"
 bg_mode = "fill"
 overlay = true
 overlay_opacity = 180
+# preset = "matrix"
+
+[gaii-control.colors]
+time = "#00FFC8"
+date = "gray"
 ```
 
 Supported keys:
@@ -199,6 +208,61 @@ Supported keys:
 | `bg_mode` | string | `stretch`, `fit`, or `fill`. |
 | `overlay` | boolean | Show or hide the time/date/CPU overlay. |
 | `overlay_opacity` | integer | Overlay opacity from `0` to `255`. |
+| `preset` | string | `matrix` or `heartbeat` (case-insensitive). `--preset` overrides it. |
+| `colors` | table | Overlay and background colors, see below. |
+
+Invalid values print a warning naming the key and are replaced by the default.
+
+### `[colors]` table
+
+Each key takes any color format accepted by `--rgb`. Presets draw their own colors and ignore this table.
+
+| Key | Colors | Default |
+| --- | --- | --- |
+| `time` | Clock text | `#00FFC8` (`0,255,200`) |
+| `date` | Date text | `#787878` (`120,120,120`) |
+| `cpu_temp` | CPU temperature text | `#00C8FF` (`0,200,255`) |
+| `cpu_usage` | CPU usage text | `#FFA000` (`255,160,0`) |
+| `overlay` | Translucent panel over a background image (see `overlay_opacity`) | `#000000` (`0,0,0`) |
+| `background` | Solid screen fill when there is no background image | `#1E1E1E` (`30,30,30`) |
+| `panel` | Inner 400×400 panel when there is no background image | `#0A0A0A` (`10,10,10`) |
+
+## Hot reload
+
+`glc` checks the config file and the background image about once per second. When either changes, it reloads the settings and applies only what changed:
+
+- `rgb` or `preset`: the pump RGB is sent again and the preset is switched.
+- `bg`, `bg_mode`, or the image file itself: the background is reloaded.
+- `fps`: the frame rate changes on the next frame.
+- `overlay`, `overlay_opacity`, and `[colors]`: used from the next frame.
+
+If `bg` is a symlink, `glc` follows it and notices when the link is re-pointed at a different file. This makes it easy to drive the LCD from a wallpaper or theme tool such as [noctalia](https://github.com/noctalia-dev/noctalia): let the tool regenerate the config from a template (colors from the current palette) and point a `bg` symlink at the current wallpaper. CLI options stay fixed for the lifetime of the process, so leave the reloadable values to the config file.
+
+## Run as a service
+
+A minimal `systemd --user` unit, e.g. `~/.config/systemd/user/glc.service`:
+
+```ini
+[Unit]
+Description=Galahad II LCD display
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.nix-profile/bin/glc --config %h/.local/state/glc/config.toml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now glc.service
+```
+
+`glc` exits with a non-zero status when the device cannot be opened or when USB writes keep failing (10 frames in a row), so `Restart=on-failure` retries after a USB reset or a late device enumeration.
 
 ## Colors
 
@@ -249,12 +313,12 @@ Run checks:
 
 ```bash
 cargo fmt -- --check
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 cargo test
 nix build .
 ```
 
-The automated tests do not require the pump. They cover color parsing, config merging, packet construction, rendering size checks, preset rendering, and H.264 encoding when `ffmpeg` is available.
+The automated tests do not require the pump. They cover color parsing, config merging, hot-reload decisions (including a re-pointed background symlink), packet construction, rendering, preset rendering, and H.264 encoding when `ffmpeg` is available.
 
 Real-device validation is still manual:
 
@@ -327,7 +391,7 @@ Before opening a pull request, run:
 
 ```bash
 cargo fmt -- --check
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
